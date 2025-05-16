@@ -29,15 +29,6 @@ const selectFormatter = function (item) {
 initialize();
 
 function initialize() {
-  let fileReaderOpts = {
-    readAsDefault: "ArrayBuffer",
-    on: {
-      load: function (e) {
-        loadDB(e.target.result);
-      },
-    },
-  };
-
   let toggleFullScreen = function () {
     const container = $("#main-container");
     const resizerExpandIcon = $("#resizer-expand");
@@ -50,11 +41,28 @@ function initialize() {
   $("#resizer").click(toggleFullScreen);
   $("#sql-editor").keydown(onKeyDown);
 
-  if (typeof FileReader === "undefined" || typeof WebAssembly === "undefined") {
-    $("#dropzone, #dropzone-dialog").hide();
+  if (typeof WebAssembly === "undefined") {
     $("#compat-error").toggleClass("d-none", false);
   } else {
-    $("#dropzone, #dropzone-dialog").fileReaderJS(fileReaderOpts);
+    setIsLoading(true);
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "cached.db", true);
+    xhr.responseType = "arraybuffer";
+    xhr.onload = function (e) {
+      if (this.status === 200) {
+        loadDB(this.response);
+      } else {
+        showError(
+          "Failed to load default database: cached.db. Status: " + this.status
+        );
+        setIsLoading(false);
+      }
+    };
+    xhr.onerror = function (e) {
+      showError("Error occurred while trying to fetch cached.db.");
+      setIsLoading(false);
+    };
+    xhr.send();
   }
 
   //Initialize editor
@@ -72,32 +80,6 @@ function initialize() {
   $(".no-propagate").on("click", function (el) {
     el.stopPropagation();
   });
-
-  //Check url to load remote DB
-  $.urlParam = function (name) {
-    let results = new RegExp(`[\?&]${name}=([^&#]*)`).exec(
-      window.location.href
-    );
-    if (results == null) {
-      return null;
-    } else {
-      return results[1] || 0;
-    }
-  };
-  const loadUrlDB = $.urlParam("url");
-  if (loadUrlDB != null) {
-    setIsLoading(true);
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", decodeURIComponent(loadUrlDB), true);
-    xhr.responseType = "arraybuffer";
-    xhr.onload = function (e) {
-      loadDB(this.response);
-    };
-    xhr.onerror = function (e) {
-      setIsLoading(false);
-    };
-    xhr.send();
-  }
 }
 
 function loadDB(arrayBuffer) {
@@ -148,9 +130,6 @@ function loadDB(arrayBuffer) {
     doDefaultSelect(firstTableName);
 
     $("#output-box").fadeIn();
-    $(".nouploadinfo").hide();
-    $("#sample-db-link").hide();
-    $("#dropzone").delay(50).animate({ height: 75 }, 500);
     $("#success-box").show();
 
     setIsLoading(false);
@@ -236,19 +215,15 @@ function resetTableList() {
 }
 
 function setIsLoading(isLoading) {
-  const dropText = $("#drop-text");
-  const loading = $("#drop-loading");
-  if (isLoading) {
-    dropText.hide();
-    loading.toggleClass("d-none", false);
-  } else {
-    dropText.show();
-    loading.toggleClass("d-none", true);
-  }
-}
+  const globalLoading = $("#global-loading");
 
-function dropzoneClick() {
-  $("#dropzone-dialog").click();
+  if (globalLoading.length) {
+    if (isLoading) {
+      globalLoading.removeClass("d-none");
+    } else {
+      globalLoading.addClass("d-none");
+    }
+  }
 }
 
 function doDefaultSelect(name) {
